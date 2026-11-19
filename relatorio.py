@@ -37,7 +37,7 @@ def erd(path):
 
 
 def tbl(df, fs=8):
-    data = [list(df.columns)] + [[(f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if isinstance(v, float) else str(v))
+    data = [list(df.columns)] + [[(v.strftime("%d/%m/%Y") if hasattr(v, "strftime") else f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if (isinstance(v, float) or hasattr(v, "strftime")) else str(v))
                                   for v in r] for r in df.itertuples(index=False)]
     t = Table(data, repeatRows=1)
     t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1f4e79")), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
@@ -59,12 +59,20 @@ def main():
                    "Em <b>oltp_produtos</b> foi adicionada <b>custo_unitario</b> (60% do preço, sempre inferior a ele). "
                    "O DuckDB não aceita FK em ALTER TABLE ADD COLUMN; por isso a integridade referencial de vendedor_id é validada por "
                    "uma verificação de órfãos no script.", B),
+         Paragraph("oltp_vendedores", ss["Heading4"]), tbl(con.execute("SELECT * FROM oltp_vendedores").df()),
+         Paragraph("oltp_pedidos (com vendedor_id e forma_pagamento)", ss["Heading4"]),
+         tbl(con.execute("SELECT * FROM oltp_pedidos").df()),
+         Paragraph("oltp_produtos (com custo_unitario)", ss["Heading4"]),
+         tbl(con.execute("SELECT * FROM oltp_produtos").df()),
          Paragraph("2. ETL e Star Schema", H),
          Paragraph("O DW tem 5 dimensões (cliente, produto, vendedor, pagamento, tempo) com <i>surrogate keys</i> (sk_) geradas por ROW_NUMBER e "
                    "<i>natural keys</i> (nk_) preservadas. A <b>fato_vendas</b> (grão: item de pedido) guarda as SKs e as métricas "
                    "quantidade, receita (valor_pago), custo_total (quantidade × custo_unitario), lucro_bruto (receita − custo_total) e, como extra, "
                    "margem_lucro_pct. Uma verificação confirma que a receita total do DW é igual à do OLTP.", B),
          Image("erd_modelo_estrela.png", 13 * cm, 8.7 * cm), PageBreak(),
+         Paragraph("Tabelas do Data Warehouse", H)] + sum(
+        [[Paragraph(n, ss["Heading4"]), tbl(con.execute(f"SELECT * FROM {n}").df(), 6.5)]
+         for n in ["dim_vendedor", "dim_pagamento", "dim_cliente", "dim_produto", "dim_tempo"]], []) + [PageBreak(), Paragraph("fato_vendas", ss["Heading4"]), tbl(con.execute("SELECT * FROM fato_vendas").df(), 6.5)] + [PageBreak(),
          Paragraph("3. Consultas analíticas", H)]
     r = [("3.1 Lucratividade por categoria", P.Q1, q["Q1"], f"A categoria <b>{q['Q1'].iloc[0,0]}</b> teve a maior receita e também o maior lucro bruto."),
          ("3.2 Desempenho por vendedor e região", P.Q2, q["Q2"], f"<b>{q['Q2'].iloc[0,0]}</b>, da região <b>{q['Q2'].iloc[0,1]}</b>, gerou mais receita."),
